@@ -2,6 +2,8 @@ import { GeotabApi } from "./geotab-api.js";
 import { buildUtilizationReport } from "./report-builder.js";
 import { exportAnnualUtilizationWorkbook } from "./excel-exporter.js";
 
+const APP_VERSION = "1.0.1";
+
 // Tuning knobs for large fleets (500-5000 vehicles):
 // - Increase concurrency for faster loads, decrease if rate-limited.
 // - Increase inter-request delay to be friendlier to API limits.
@@ -48,7 +50,8 @@ const els = {
   summaryWarnings: document.getElementById("summaryWarnings"),
   warningsPanel: document.getElementById("warningsPanel"),
   warningsCount: document.getElementById("warningsCount"),
-  warningsList: document.getElementById("warningsList")
+  warningsList: document.getElementById("warningsList"),
+  appVersionBadge: document.getElementById("appVersionBadge")
 };
 
 function delay(ms) {
@@ -492,10 +495,12 @@ function wireEvents() {
 function initializeApp() {
   setDefaultDateRange();
   wireEvents();
+  els.appVersionBadge.textContent = `v${APP_VERSION}`;
   updatePreview([]);
   updateSummary(null);
   updateWarnings([]);
-  setMockBanner(!geotabApi.getModeInfo().hasApiCandidate);
+  // Show banner only when mock mode is actually active, not just when disconnected.
+  setMockBanner(false);
 }
 
 initializeApp();

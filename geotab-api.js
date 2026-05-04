@@ -151,7 +151,8 @@ export class GeotabApi {
     return {
       hasApiCandidate,
       mockRequested,
-      canEnableMockInConnectedMode: this.isDevelopment
+      canEnableMockInConnectedMode: this.isDevelopment,
+      canEnableMockWhenDisconnected: this.isDevelopment
     };
   }
 
@@ -170,7 +171,8 @@ export class GeotabApi {
 
     const hasApi = Boolean(this.api && typeof this.api.call === "function");
     const allowForcedMock = this.runtimeInfo.mockRequested && this.runtimeInfo.canEnableMockInConnectedMode;
-    const autoMock = !hasApi;
+    const allowDisconnectedMock =
+      !hasApi && this.runtimeInfo.mockRequested && this.runtimeInfo.canEnableMockWhenDisconnected;
 
     if (hasApi && !allowForcedMock) {
       this.isMockMode = false;
@@ -186,7 +188,7 @@ export class GeotabApi {
       return;
     }
 
-    if (allowForcedMock || autoMock) {
+    if (allowForcedMock || allowDisconnectedMock) {
       this.isMockMode = true;
       this.isReady = true;
       this.#log("Initialized Geotab API client in mock mode.");
@@ -194,7 +196,7 @@ export class GeotabApi {
     }
 
     throw new Error(
-      "Geotab API is unavailable. Run inside MyGeotab Add-In context or load mg-api-js and expose an API object with call(method, params, success, error)."
+      "Geotab API is unavailable. Open this add-in inside MyGeotab to use real data. For local development only, enable mock mode with ?mock=1 and ?debug=true."
     );
   }
 
