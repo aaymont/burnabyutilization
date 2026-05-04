@@ -22,11 +22,11 @@ Static MyGeotab page add-in for generating an Annual Utilization Report and expo
 
 ## Hosted URL (Configure Before Deploy)
 
-Use this placeholder and replace it with your actual GitHub Pages URL:
+Configured GitHub Pages URL for this repository:
 
-- `https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/index.html`
+- `https://aaymont.github.io/burnabyutilization/index.html`
 
-`manifest.json` currently uses this placeholder in the `items[0].url` value.
+`manifest.json` is set to this URL in `items[0].url`.
 
 ## Report Columns
 
@@ -58,15 +58,16 @@ npx serve .
 4. Enable Pages from:
    - `main` branch, `/ (root)` **or**
    - `main` branch, `/docs` (if you host files there).
-5. Confirm the public URL is live, for example:
-   - `https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/index.html`
-6. Update `manifest.json` if needed so `items[0].url` points to that exact public `index.html` URL.
+5. Confirm the public URL is live:
+   - `https://aaymont.github.io/burnabyutilization/index.html`
+6. Confirm `manifest.json` `items[0].url` matches that exact public `index.html` URL.
 
 ## MyGeotab Add-In Setup
 
 1. Host this project on GitHub Pages.
 2. In MyGeotab, go to **Administration > System > Add-Ins**.
-3. Add a new add-in and use the hosted `manifest.json` URL.
+3. Add a new add-in and use the hosted `manifest.json` URL:
+   - `https://aaymont.github.io/burnabyutilization/manifest.json`
 4. Save and open the add-in from the left navigation menu.
 
 ## Troubleshooting
