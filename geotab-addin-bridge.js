@@ -40,10 +40,16 @@
   geotab.addin = geotab.addin || {};
 
   /*
-   * Match the ActivityLink HTML filename stem (Geotab convention):
-   * e.g. fleet-stats.html → geotab.addin["fleet-stats"]. This entry is index.html → "index".
+   * MyGeotab routes page add-ins using a slug from the manifest name + HTML stem; the hash looks like
+   * #addin-annual-utilization-report-index for name "Annual Utilization Report" and index.html.
+   * Keep "index" for hosts that resolve only the file stem (see Geotab samples).
    */
-  geotab.addin["index"] = function () {
-    return makeAddinLifecycle();
-  };
+  function register(key) {
+    geotab.addin[key] = function () {
+      return makeAddinLifecycle();
+    };
+  }
+
+  register("annual-utilization-report-index");
+  register("index");
 })();

@@ -1,8 +1,8 @@
-import { GeotabApi } from "./geotab-api.js?v=1.0.4";
-import { buildUtilizationReport } from "./report-builder.js?v=1.0.4";
-import { exportAnnualUtilizationWorkbook } from "./excel-exporter.js?v=1.0.4";
+import { GeotabApi } from "./geotab-api.js?v=1.0.5";
+import { buildUtilizationReport } from "./report-builder.js?v=1.0.5";
+import { exportAnnualUtilizationWorkbook } from "./excel-exporter.js?v=1.0.5";
 
-const APP_VERSION = "1.0.4";
+const APP_VERSION = "1.0.5";
 
 // Tuning knobs for large fleets (500-5000 vehicles):
 // - Increase concurrency for faster loads, decrease if rate-limited.
@@ -119,6 +119,8 @@ function resetProgress() {
   els.progressFill.style.width = "0%";
   els.progressPercent.textContent = "0%";
   els.progressBarWrap.classList.add("hidden");
+  els.progressState.textContent = "";
+  els.progressState.classList.add("hidden");
 }
 
 function setLoading(isLoading, message = "Loading...") {
@@ -400,7 +402,11 @@ async function loadFleetData() {
     const devices = await withRetry(() => geotabApi.getDevices(), "Device load");
 
     if (!devices.length) {
-      showMessage("warning", "No vehicles were found for this account.");
+      resetProgress();
+      showMessage(
+        "warning",
+        "No vehicles were found for this account. If vehicles exist in your database, confirm this user's clearance can view them and adjust the organizational filter."
+      );
       return;
     }
 
