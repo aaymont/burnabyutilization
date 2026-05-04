@@ -1,10 +1,10 @@
 {
   "name": "Annual Utilization Report",
   "supportEmail": "https://github.com/aaymont/burnabyutilization",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "items": [
     {
-      "url": "https://aaymont.github.io/burnabyutilization/index.html?v=1.0.3",
+      "url": "https://aaymont.github.io/burnabyutilization/index.html?v=1.0.4",
       "path": "ActivityLink/",
       "menuName": {
         "en": "Annual Utilization Report"

@@ -120,6 +120,7 @@ export class GeotabApi {
   #resolveApiFromEnvironment() {
     const root = getGlobalObject();
     const candidates = [
+      root?.__MYGEOTAB_API__,
       root?.geotabApi,
       root?.api,
       root?.geotab?.api,
@@ -138,6 +139,64 @@ export class GeotabApi {
     }
 
     return null;
+  }
+
+  /** Wait for initialize(api) from geotab.addin bridge (hosted page add-ins). */
+  async #waitForHostApi(timeoutMs = 25000) {
+    const root = getGlobalObject();
+    const tryResolve = () => this.#extractApiCandidate(root?.__MYGEOTAB_API__) || this.#resolveApiFromEnvironment();
+
+    const immediate = tryResolve();
+    if (immediate) {
+      return immediate;
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (api, err) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearInterval(pollId);
+        if (typeof root.addEventListener === "function" && typeof root.removeEventListener === "function") {
+          root.removeEventListener("mygeotab:api-ready", onReady);
+        }
+        clearTimeout(timer);
+        if (err) {
+          reject(err);
+          return;
+        }
+        const resolved = this.#extractApiCandidate(api) || tryResolve();
+        if (resolved) {
+          resolve(resolved);
+          return;
+        }
+        reject(new Error("MyGeotab API reference was not usable after host handshake."));
+      };
+
+      const onReady = (event) => {
+        const api = event?.detail?.api;
+        if (api && typeof api.call === "function") {
+          finish(api);
+        }
+      };
+
+      if (typeof root?.addEventListener === "function") {
+        root.addEventListener("mygeotab:api-ready", onReady);
+      }
+
+      const pollId = setInterval(() => {
+        const candidate = tryResolve();
+        if (candidate) {
+          finish(candidate);
+        }
+      }, 120);
+
+      const timer = setTimeout(() => {
+        finish(null, new Error(`Timed out after ${timeoutMs / 1000}s waiting for MyGeotab session API.`));
+      }, timeoutMs);
+    });
   }
 
   #detectRuntimeInfo() {
@@ -166,7 +225,18 @@ export class GeotabApi {
 
   async initialize(geotabApiRef = null) {
     const explicitApi = this.#extractApiCandidate(geotabApiRef);
-    this.api = explicitApi || this.#resolveApiFromEnvironment();
+    let resolvedApi = explicitApi || this.#resolveApiFromEnvironment();
+
+    /* Hosted ActivityLink pages receive api only via geotab.addin.initialize — wait if not yet bound. */
+    if (!resolvedApi || typeof resolvedApi.call !== "function") {
+      try {
+        resolvedApi = await this.#waitForHostApi();
+      } catch (_waitError) {
+        resolvedApi = explicitApi || this.#resolveApiFromEnvironment();
+      }
+    }
+
+    this.api = resolvedApi;
     this.runtimeInfo = this.#detectRuntimeInfo();
 
     const hasApi = Boolean(this.api && typeof this.api.call === "function");
@@ -196,7 +266,7 @@ export class GeotabApi {
     }
 
     throw new Error(
-      "Geotab API is unavailable. Open this add-in inside MyGeotab to use real data. For local development only, enable mock mode with ?mock=1 and ?debug=true."
+      'Geotab API is unavailable. Ensure geotab-addin-bridge.js loads before the app and reopen the add-in from MyGeotab. For local-only mock data use ?mock=1 with ?debug=true.'
     );
   }
 
