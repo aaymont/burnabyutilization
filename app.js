@@ -27,10 +27,14 @@ const els = {
   startDate: document.getElementById("startDate"),
   endDate: document.getElementById("endDate"),
   loadFleetBtn: document.getElementById("loadFleetBtn"),
+  cancelLoadBtn: document.getElementById("cancelLoadBtn"),
   generateReportBtn: document.getElementById("generateReportBtn"),
   loadingState: document.getElementById("loadingState"),
   loadingMessage: document.getElementById("loadingMessage"),
   progressState: document.getElementById("progressState"),
+  progressBarWrap: document.getElementById("progressBarWrap"),
+  progressFill: document.getElementById("progressFill"),
+  progressPercent: document.getElementById("progressPercent"),
   errorState: document.getElementById("errorState"),
   warningState: document.getElementById("warningState"),
   successState: document.getElementById("successState"),
@@ -98,14 +102,34 @@ function showMessage(type, message) {
   target.classList.remove("hidden");
 }
 
+function setProgress(percent, message = "") {
+  const safePercent = Math.max(0, Math.min(100, Math.round(percent)));
+  els.progressFill.style.width = `${safePercent}%`;
+  els.progressPercent.textContent = `${safePercent}%`;
+  els.progressBarWrap.classList.remove("hidden");
+  if (message) {
+    showMessage("progress", message);
+  }
+}
+
+function resetProgress() {
+  els.progressFill.style.width = "0%";
+  els.progressPercent.textContent = "0%";
+  els.progressBarWrap.classList.add("hidden");
+}
+
 function setLoading(isLoading, message = "Loading...") {
   state.isLoading = isLoading;
   els.loadFleetBtn.disabled = isLoading;
+  els.cancelLoadBtn.disabled = !isLoading;
   els.generateReportBtn.disabled = isLoading || !state.report || state.rows.length === 0;
   els.startDate.disabled = isLoading;
   els.endDate.disabled = isLoading;
   els.loadingMessage.textContent = message;
   els.loadingState.classList.toggle("hidden", !isLoading);
+  if (!isLoading) {
+    resetProgress();
+  }
 }
 
 function updatePreview(rows) {
@@ -316,7 +340,8 @@ async function loadPerDeviceData(devices, fromDate, toDate) {
           value: o.value
         }));
         processed += 1;
-        showMessage("progress", `Processing ${processed} of ${devices.length} vehicles...`);
+        const percent = 35 + (processed / devices.length) * 55;
+        setProgress(percent, `Processing ${processed} of ${devices.length} vehicles...`);
         if (DEVICE_INTER_REQUEST_DELAY_MS > 0) {
           await delay(DEVICE_INTER_REQUEST_DELAY_MS);
         }
@@ -335,6 +360,7 @@ function cancelCurrentLoad(reason = "Load cancelled.") {
     return;
   }
   state.loadController.cancelled = true;
+  setProgress(0);
   showMessage("warning", reason);
 }
 
@@ -360,15 +386,14 @@ async function loadFleetData() {
 
   try {
     setLoading(true, "Loading fleet data...");
-
-    showMessage("progress", "Initializing API...");
+    setProgress(5, "Initializing API...");
     await withRetry(() => geotabApi.initialize(window.geotabApi || null), "API initialization");
     setMockBanner(geotabApi.getModeInfo().isMockMode);
 
-    showMessage("progress", "Loading groups...");
+    setProgress(12, "Loading groups...");
     const groups = await withRetry(() => geotabApi.getGroups(), "Group load");
 
-    showMessage("progress", "Loading devices...");
+    setProgress(22, "Loading devices...");
     const devices = await withRetry(() => geotabApi.getDevices(), "Device load");
 
     if (!devices.length) {
@@ -377,14 +402,14 @@ async function loadFleetData() {
     }
 
     const { fromIso, toIso } = toInclusiveDateRangeIso(dates.fromDate, dates.toDate);
-    showMessage("progress", `Loading trip and odometer data for ${devices.length} vehicles...`);
+    setProgress(35, `Loading trip and odometer data for ${devices.length} vehicles...`);
     const { tripsByDevice, odometerByDevice } = await loadPerDeviceData(
       devices,
       fromIso,
       toIso
     );
 
-    showMessage("progress", "Building utilization report...");
+    setProgress(93, "Building utilization report...");
     const report = buildUtilizationReport({
       devices,
       groups,
@@ -410,6 +435,7 @@ async function loadFleetData() {
       totalVehicles: devices.length
     });
     updateWarnings(report.warnings);
+    setProgress(100, "Load complete.");
 
     if (state.rows.length === 0) {
       showMessage("warning", "No data found for the selected date range.");

@@ -26,6 +26,7 @@
 
       <div class="button-row">
         <button id="loadFleetBtn" type="button">Load Fleet Data</button>
+        <button id="cancelLoadBtn" type="button" disabled>Cancel</button>
         <button id="generateReportBtn" type="button" disabled>Generate Excel Report</button>
       </div>
     </section>
@@ -36,6 +37,14 @@
         <span id="loadingMessage">Loading...</span>
       </div>
       <div id="progressState" class="state state-progress hidden"></div>
+      <div id="progressBarWrap" class="progress-wrap hidden" aria-hidden="true">
+        <div class="progress-meta">
+          <span id="progressPercent">0%</span>
+        </div>
+        <div class="progress-track">
+          <div id="progressFill" class="progress-fill"></div>
+        </div>
+      </div>
       <div id="errorState" class="state state-error hidden" role="alert"></div>
       <div id="warningState" class="state state-warning hidden" role="status"></div>
       <div id="successState" class="state state-success hidden" role="status"></div>
