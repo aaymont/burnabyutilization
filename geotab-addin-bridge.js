@@ -40,9 +40,8 @@
   geotab.addin = geotab.addin || {};
 
   /*
-   * MyGeotab routes page add-ins using a slug from the manifest name + HTML stem; the hash looks like
-   * #addin-annual-utilization-report-index for name "Annual Utilization Report" and index.html.
-   * Keep "index" for hosts that resolve only the file stem (see Geotab samples).
+   * Hash routes like #addin-<nameSlug>-<htmlStem>; nameSlug may use underscores or hyphens depending on server.
+   * Example: "Annual Utilization Report" + index.html → annual_utilization_report-index.
    */
   function register(key) {
     geotab.addin[key] = function () {
@@ -50,6 +49,7 @@
     };
   }
 
+  register("annual_utilization_report-index");
   register("annual-utilization-report-index");
   register("index");
 })();

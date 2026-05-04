@@ -7,6 +7,9 @@ const ENTITY_PAGE_SIZE = 500;
 const FEED_MAX_PAGES = 500;
 const GET_FEED_METHOD = "GetFeed";
 
+/** Several entity types return NotSupportedException for GetFeed; use Get with resultsLimit instead. */
+const ENTITY_TYPES_WITHOUT_GET_FEED = new Set(["Group"]);
+
 function parseDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -348,14 +351,27 @@ export class GeotabApi {
   }
 
   async #safeGetAllEntities(typeName, options = {}) {
+    const getLimit = options.fallbackResultsLimit || 50000;
+
+    if (ENTITY_TYPES_WITHOUT_GET_FEED.has(typeName)) {
+      return await this.apiCall("Get", {
+        typeName,
+        resultsLimit: getLimit
+      });
+    }
+
     try {
       return await this.#getAllEntitiesWithFeed(typeName, options);
     } catch (error) {
       const sanitized = this.#sanitizeError(error);
-      this.#warn(`GetFeed failed for ${typeName}, using Get fallback.`, sanitized);
+      if (/does not support GetFeed/i.test(sanitized)) {
+        this.#warn(`GetFeed unsupported for ${typeName}, using Get.`, sanitized);
+      } else {
+        this.#warn(`GetFeed failed for ${typeName}, using Get fallback.`, sanitized);
+      }
       return await this.apiCall("Get", {
         typeName,
-        resultsLimit: options.fallbackResultsLimit || 50000
+        resultsLimit: getLimit
       });
     }
   }
