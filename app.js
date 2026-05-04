@@ -1,8 +1,8 @@
-import { GeotabApi } from "./geotab-api.js";
-import { buildUtilizationReport } from "./report-builder.js";
-import { exportAnnualUtilizationWorkbook } from "./excel-exporter.js";
+import { GeotabApi } from "./geotab-api.js?v=1.0.3";
+import { buildUtilizationReport } from "./report-builder.js?v=1.0.3";
+import { exportAnnualUtilizationWorkbook } from "./excel-exporter.js?v=1.0.3";
 
-const APP_VERSION = "1.0.1";
+const APP_VERSION = "1.0.3";
 
 // Tuning knobs for large fleets (500-5000 vehicles):
 // - Increase concurrency for faster loads, decrease if rate-limited.
