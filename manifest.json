@@ -1,0 +1,14 @@
+{
+  "name": "annual-utilization-report",
+  "supportEmail": "support@example.com",
+  "version": "1.0.0",
+  "items": [
+    {
+      "url": "https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO_NAME/index.html",
+      "menuName": {
+        "en": "Annual Utilization Report"
+      }
+    }
+  ],
+  "isSigned": false
+}

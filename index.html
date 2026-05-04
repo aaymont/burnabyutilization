@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Annual Utilization Report</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="container">
+    <header class="page-header">
+      <h1>Annual Utilization Report</h1>
+      <p class="subtitle">Generate and export annual fleet utilization as an Excel file.</p>
+    </header>
+
+    <section class="panel controls-panel" aria-label="Report Controls">
+      <div class="field-row">
+        <label for="startDate">Report Start</label>
+        <input id="startDate" name="startDate" type="date" required>
+      </div>
+
+      <div class="field-row">
+        <label for="endDate">Report End</label>
+        <input id="endDate" name="endDate" type="date" required>
+      </div>
+
+      <div class="button-row">
+        <button id="loadFleetBtn" type="button">Load Fleet Data</button>
+        <button id="generateReportBtn" type="button" disabled>Generate Excel Report</button>
+      </div>
+    </section>
+
+    <section class="panel status-panel" aria-live="polite">
+      <div id="loadingState" class="state state-loading hidden">
+        <div class="spinner" aria-hidden="true"></div>
+        <span id="loadingMessage">Loading...</span>
+      </div>
+      <div id="progressState" class="state state-progress hidden"></div>
+      <div id="errorState" class="state state-error hidden" role="alert"></div>
+      <div id="warningState" class="state state-warning hidden" role="status"></div>
+      <div id="successState" class="state state-success hidden" role="status"></div>
+    </section>
+
+    <section id="summaryPanel" class="panel summary-panel hidden" aria-label="Report Summary">
+      <h2>Summary</h2>
+      <div class="summary-grid">
+        <div class="summary-item">
+          <span class="summary-label">Total Vehicles</span>
+          <span id="summaryTotalVehicles" class="summary-value">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Number of Areas</span>
+          <span id="summaryAreas" class="summary-value">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Total Mileage</span>
+          <span id="summaryMileage" class="summary-value">0.00 km</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Total Driving Duration</span>
+          <span id="summaryDriving" class="summary-value">00:00:00</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Warnings</span>
+          <span id="summaryWarnings" class="summary-value">0</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="warningsPanel" class="panel warnings-panel hidden" aria-label="Warnings">
+      <details>
+        <summary>Warnings (<span id="warningsCount">0</span>)</summary>
+        <ul id="warningsList" class="warnings-list"></ul>
+      </details>
+    </section>
+
+    <section class="panel preview-panel" aria-label="Report Preview">
+      <div class="preview-header">
+        <h2>Preview</h2>
+        <span id="rowCount" class="row-count">0 rows</span>
+      </div>
+      <div class="table-wrap">
+        <table id="previewTable">
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Vehicle Label</th>
+              <th>MMY Year</th>
+              <th>MMY Make</th>
+              <th>MMY Model</th>
+              <th>Area</th>
+              <th>Manager</th>
+              <th>Mileage (km)</th>
+              <th>Driving Duration</th>
+            </tr>
+          </thead>
+          <tbody id="previewTableBody">
+            <tr>
+              <td colspan="9" class="empty-row">No data loaded yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- SheetJS CDN (required by excel-exporter.js) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

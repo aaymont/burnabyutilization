@@ -1,0 +1,963 @@
+# Building Geotab Add-Ins
+
+## What Are Geotab Add-Ins?
+Custom pages that integrate directly into MyGeotab. They can display dashboards, create tools/reports, and modify fleet data.
+
+## Two Deployment Types
+
+| External Hosted (Recommended) | Embedded (No Hosting) |
+|------------------------------|----------------------|
+| Files on HTTPS server | Code in JSON configuration |
+| Separate HTML, CSS, JS files | Everything inline in one string |
+| Easy to develop and debug | Good for simple prototypes |
+| **Use external CSS files for styling** | Must use inline `style=""` attributes |
+
+**Recommended Hosting: GitHub Pages** - Free, simple static hosting with proper CORS support. Just push files and enable Pages in repo settings.
+
+### Quick Reference: Embedded Add-In Format
+
+> **CRITICAL:** Embedded Add-Ins use a specific JSON structure. Getting this wrong causes "Page Not Found" errors.
+
+```json
+{
+  "name": "My Add In",
+  "supportEmail": "https://github.com/your-repo",
+  "version": "1.0",
+  "items": [{
+    "url": "page.html",
+    "path": "ActivityLink",
+    "menuName": { "en": "My Add-In" }
+  }],
+  "files": {
+    "page.html": "<!DOCTYPE html><html>...</html>"
+  }
+}
+```
+
+**Common Mistake - WRONG format:**
+```json
+"pages": [{ "html": "..." }]
+"items": [{ "html": "..." }]
+"content": "..."
+```
+
+**Correct format:**
+```json
+"files": { "page.html": "<!DOCTYPE html>..." }
+```
+
+See [EMBEDDED.md](EMBEDDED.md) for complete details.
+
+Other options: Netlify, Vercel, Firebase Hosting (all have CORS support).
+
+**CORS Required:** Hosting must include `Access-Control-Allow-Origin: *` header.
+
+## Front-End Styling Options
+
+| Approach | Best For | Notes |
+|----------|----------|-------|
+| **Vanilla JS + External CSS** | Most add-ins, embedded | External CSS for reliable styling |
+| **React + Zenith** | Professional UI matching MyGeotab | See [ZENITH_STYLING.md](ZENITH_STYLING.md) |
+
+**Note:** Embedded add-ins must use vanilla JS with inline styles. React/Zenith requires external hosting.
+
+## Add-In Structure
+
+Every Add-In must register with MyGeotab and implement three lifecycle methods:
+
+```javascript
+geotab.addin["your-addin-name"] = function() {
+    var apiRef = null;
+
+    return {
+        initialize: function(api, state, callback) {
+            apiRef = api;
+            // Setup code here
+            callback();  // MUST call this!
+        },
+        focus: function(api, state) {
+            apiRef = api;
+            // Refresh data here
+        },
+        blur: function(api, state) {
+            // Cleanup here
+        }
+    };
+};  // Note: No () - assign function, don't invoke it
+```
+
+## Recommended: External CSS Pattern
+
+For reliable styling in MyGeotab's iframe, use separate CSS files (inline `<style>` tags may not render):
+
+**your-addin.html**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Your Add-In</title>
+    <link rel="stylesheet" href="your-addin.css">
+</head>
+<body>
+    <div id="app">...</div>
+    <script src="your-addin.js"></script>
+</body>
+</html>
+```
+
+**your-addin.css**
+```css
+body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+.card { background: white; padding: 20px; border-radius: 8px; }
+```
+
+**MyGeotab Configuration:**
+```json
+{
+  "name": "Your Add In",
+  "supportEmail": "https://github.com/fhoffa/geotab-vibe-guide",
+  "version": "1.0.0",
+  "items": [{
+    "url": "https://yourusername.github.io/repo/your-addin.html",
+    "path": "ActivityLink/",
+    "menuName": { "en": "Your Add-In" }
+  }]
+}
+```
+
+**Configuration Rules:**
+- `name`: Letters, numbers, spaces, dots, dashes, underscores, parentheses OK. No `&`, `+`, `!`. Use `"Fleet Dashboard (Beta)"` not `"Fleet & Dashboard"`
+- `supportEmail`: Never use support@geotab.com. Use `https://github.com/fhoffa/geotab-vibe-guide` or your own contact
+- `menuName`: Can contain spaces and special characters (this is what users see in the menu). Add translations for multilingual fleets:
+  ```json
+  "menuName": {
+    "en": "Cold Chain View",
+    "fr": "Vue Chaîne du Froid",
+    "es": "Vista Cadena de Frío"
+  }
+  ```
+
+### Localization (i18n)
+
+MyGeotab passes the user's language in `state.language` during `initialize`. Use this to set UI labels:
+
+```javascript
+var i18n = {
+    en: { title: "Fleet Dashboard", loading: "Loading..." },
+    fr: { title: "Tableau de Bord", loading: "Chargement..." },
+    es: { title: "Panel de Flota", loading: "Cargando..." }
+};
+
+initialize: function(api, state, callback) {
+    var lang = state.language || "en";
+    var t = i18n[lang] || i18n.en;
+    document.getElementById("title").textContent = t.title;
+    // ...
+}
+```
+
+MyGeotab handles `menuName` translations automatically. Your JavaScript handles UI labels via `state.language`.
+
+### Filtering Devices by Group
+
+Large fleets can have thousands of vehicles. Add a group dropdown to let users narrow the list:
+
+```javascript
+// Fetch devices and groups together
+api.multiCall([
+    ["Get", { typeName: "Device" }],
+    ["Get", { typeName: "Group" }]
+], function(res) {
+    var allDevices = res[0], groups = res[1];
+
+    // Populate group dropdown
+    groups.forEach(function(g) {
+        if (g.name) {
+            var o = document.createElement("option");
+            o.value = g.id;
+            o.textContent = g.name;
+            groupSelect.appendChild(o);
+        }
+    });
+
+    // Filter vehicles when group changes
+    groupSelect.onchange = function() {
+        var gId = this.value;
+        var filtered = gId === "all" ? allDevices : allDevices.filter(function(d) {
+            return d.groups.some(function(dg) { return dg.id === gId; });
+        });
+        // Rebuild vehicle list from filtered array
+    };
+});
+
+**Embedded Add-In Rules:**
+- `<style>` tags ARE stripped - use inline `style=""` or load CSS dynamically via JS
+- CDN JS libraries WORK via `<script src="https://cdn...">`
+- CDN CSS works via dynamic loading: `var link=document.createElement('link');link.rel='stylesheet';link.href='https://cdn.../bootstrap.min.css';document.head.appendChild(link);`
+
+**Recommended CDN Libraries:**
+- **Charts:** Chart.js (`https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js`)
+- **Maps:** Leaflet (`https://unpkg.com/leaflet@1.9.4/dist/leaflet.js` + CSS via dynamic load)
+- **Dates:** Day.js (`https://cdnjs.cloudflare.com/ajax/libs/dayjs/1.11.10/dayjs.min.js`)
+- **CSS Framework:** Bootstrap (load CSS dynamically: `https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css`)
+
+**Leaflet Vehicle Map Pattern:**
+```javascript
+// Load Leaflet JS in HTML head, CSS dynamically
+var link = document.createElement('link');
+link.rel = 'stylesheet';
+link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+document.head.appendChild(link);
+
+// Create map and add markers for vehicle positions
+var map = L.map('map').setView([37.7749, -122.4194], 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: 'OpenStreetMap'
+}).addTo(map);
+
+api.call('Get', { typeName: 'DeviceStatusInfo' }, function(statuses) {
+    statuses.forEach(function(status) {
+        if (status.latitude && status.longitude) {
+            L.marker([status.latitude, status.longitude])
+                .addTo(map)
+                .bindPopup('<b>' + status.device.id + '</b>');
+        }
+    });
+});
+```
+
+## API Operations
+
+### Available Methods
+
+| Method | Purpose |
+|--------|---------|
+| `Get` | Fetch entities by type |
+| `GetCountOf` | Count entities (efficient) |
+| `Add` | Create new entity |
+| `Set` | Update existing entity |
+| `Remove` | Delete entity |
+| `GetFeed` | Incremental data sync (for polling changes) |
+| `GetAddresses` | Reverse geocoding (coordinates -> address) |
+| `GetCoordinates` | Geocoding (address -> coordinates) |
+| `GetRoadMaxSpeeds` | Speed limits at GPS locations |
+| `GetVersion` | API version info |
+| `multiCall` | Batch multiple calls in one request |
+| `getSession` | Get current user session (userName, database) |
+| `GetAceResults` | AI-powered fleet queries (see [ACE_API.md](ACE_API.md)) |
+
+### Read Data (Get)
+```javascript
+api.call("Get", { typeName: "Device" }, function(devices) {
+    console.log("Found " + devices.length + " vehicles");
+}, function(error) {
+    console.error("Error:", error);
+});
+
+// With search criteria
+api.call("Get", {
+    typeName: "Device",
+    search: { name: "Vehicle 123" }
+}, successCallback, errorCallback);
+
+// Get drivers (NOT typeName: "Driver" - it causes errors!)
+api.call("Get", {
+    typeName: "User",
+    search: { isDriver: true }
+}, function(drivers) { ... });
+
+// DON'T use resultsLimit when counting!
+// api.call("Get", { typeName: "Device", resultsLimit: 100 })
+// ^ Wrong - only returns up to 100, not total count
+```
+
+### Update Data (Set)
+```javascript
+api.call("Set", {
+    typeName: "Device",
+    entity: { id: deviceId, name: "New Name" }
+}, function() {
+    console.log("Updated!");
+}, function(error) {
+    console.error("Error:", error);
+});
+```
+
+### Create Data (Add)
+```javascript
+api.call("Add", {
+    typeName: "Zone",
+    entity: { name: "New Geofence", points: [...] }
+}, function(newId) {
+    console.log("Created with ID:", newId);
+});
+```
+
+### Delete Data (Remove)
+```javascript
+api.call("Remove", {
+    typeName: "Zone",
+    entity: { id: zoneId }
+}, function() {
+    console.log("Deleted");
+});
+```
+
+### Multiple Calls (MultiCall)
+```javascript
+api.multiCall([
+    ["Get", { typeName: "Device" }],
+    ["Get", { typeName: "User", search: { isDriver: true } }]
+], function(results) {
+    var devices = results[0];
+    var drivers = results[1];
+});
+```
+
+### Session Info
+```javascript
+api.getSession(function(session) {
+    console.log("User:", session.userName);
+    console.log("Database:", session.database);
+});
+```
+
+### DeviceStatusInfo vs StatusData — Know the Difference
+
+> Python equivalents of the patterns below are in [API_QUICKSTART.md](API_QUICKSTART.md).
+
+`DeviceStatusInfo` gives you the current vehicle state (GPS, speed, driving status) but often **lacks odometer and engine hours**. Use `StatusData` with specific Diagnostic IDs for reliable sensor readings.
+
+| Data | Source | Notes |
+|------|--------|-------|
+| Current GPS position | `DeviceStatusInfo` | `.latitude`, `.longitude` |
+| Current speed | `DeviceStatusInfo` | `.speed` (km/h) |
+| Driving status | `DeviceStatusInfo` | `.isDriving` |
+| **Odometer** | `StatusData` + `DiagnosticOdometerId` | Value in **meters** — divide by 1609.34 for miles |
+| **Engine Hours** | `StatusData` + `DiagnosticEngineHoursId` | Value in **seconds** — divide by 3600 for hours |
+| Fuel Level | `StatusData` + `DiagnosticFuelLevelId` | Percentage |
+
+```javascript
+// Get reliable odometer readings for all devices
+api.call('Get', {
+    typeName: 'StatusData',
+    search: { diagnosticSearch: { id: 'DiagnosticOdometerId' }, latestOnly: true }
+}, function(odoData) {
+    odoData.forEach(function(entry) {
+        var miles = Math.round(entry.data / 1609.34);  // meters → miles
+        console.log('Device ' + entry.device.id + ': ' + miles + ' miles');
+    });
+}, errorCallback);
+```
+
+### Reference Objects — Resolve IDs Before Using Names
+
+Many API responses return **reference objects** — nested objects with only an `id`, not the full entity. You MUST resolve them with a separate API call.
+
+```javascript
+// ExceptionEvent returns references, NOT full objects:
+// { device: { id: "b28" }, rule: { id: "RuleSpeedingId" } }
+// WRONG: exception.device.name → undefined
+// WRONG: exception.rule.name → undefined
+// WRONG: exception.latitude → undefined (ExceptionEvent has NO GPS!)
+
+// CORRECT: Build lookup maps first, then resolve
+api.multiCall([
+    ['Get', { typeName: 'Device' }],
+    ['Get', { typeName: 'Rule' }]
+], function(results) {
+    var deviceMap = {}, ruleMap = {};
+    results[0].forEach(function(d) { deviceMap[d.id] = d.name; });
+    results[1].forEach(function(r) { ruleMap[r.id] = r.name; });
+
+    // Now resolve names from exceptions
+    exceptions.forEach(function(ex) {
+        var vehicleName = deviceMap[ex.device.id] || 'Unknown';
+        var ruleName = ruleMap[ex.rule.id] || 'Unknown Rule';
+    });
+});
+```
+
+**To get GPS for an ExceptionEvent**, query LogRecord for the device during the exception's time range:
+```javascript
+api.call('Get', {
+    typeName: 'LogRecord',
+    search: {
+        deviceSearch: { id: exception.device.id },
+        fromDate: exception.activeFrom,
+        toDate: exception.activeTo
+    }
+}, function(logs) {
+    logs.forEach(function(log) {
+        // log.latitude, log.longitude are available here
+    });
+}, errorCallback);
+```
+
+### Querying StatusData with Diagnostic IDs
+
+StatusData contains detailed sensor readings, but you need the **correct Diagnostic ID** to get specific measurements. There are 65,000+ diagnostic types - knowing the right ID unlocks detailed vehicle telemetry.
+
+**⚠️ CRITICAL — Unit Conversions:**
+| Diagnostic | Raw Unit | Conversion |
+|------------|----------|------------|
+| `DiagnosticOdometerId` | meters | ÷ 1609.34 for miles, ÷ 1000 for km |
+| `DiagnosticEngineHoursId` | seconds | ÷ 3600 for hours |
+| `DiagnosticSpeedId` | km/h | × 0.621371 for mph |
+| Trip `.distance` | kilometers | × 0.621371 for miles |
+
+**How to discover Diagnostic IDs:**
+1. In MyGeotab, go to **Engine & Maintenance > Engine Measurements**
+2. Select the measurement you want (e.g., "Cranking Voltage")
+3. Check the URL - it shows the Diagnostic ID: `#engineMeasurements,diagnostics:!(DiagnosticCrankingVoltageId)`
+
+**Example: Get Cranking Voltage for a Vehicle**
+```javascript
+var fromDate = new Date();
+fromDate.setDate(fromDate.getDate() - 7);  // Last 7 days
+
+api.call('Get', {
+    typeName: 'StatusData',
+    search: {
+        diagnosticSearch: { id: 'DiagnosticCrankingVoltageId' },
+        deviceSearch: { id: deviceId },
+        fromDate: fromDate.toISOString(),
+        toDate: new Date().toISOString()
+    }
+}, function(readings) {
+    readings.forEach(function(r) {
+        console.log('Voltage: ' + r.data + ' at ' + r.dateTime);
+    });
+}, errorCallback);
+```
+
+**Common Diagnostic IDs:**
+| Measurement | Diagnostic ID |
+|-------------|---------------|
+| Cranking Voltage | `DiagnosticCrankingVoltageId` |
+| Odometer | `DiagnosticOdometerId` |
+| Fuel Level | `DiagnosticFuelLevelId` |
+| Engine Hours | `DiagnosticEngineHoursId` |
+| Battery Voltage | `DiagnosticBatteryTemperatureId` |
+
+**⚠️ Odometer vs OdometerAdjustment:** Use `DiagnosticOdometerId` for the actual current reading. `DiagnosticOdometerAdjustmentId` is for manual offset adjustments and typically returns 0.
+| Cargo Temp Zone 1 | `DiagnosticCargoTemperatureZone1Id` |
+| Cargo Temp Zone 2 | `DiagnosticCargoTemperatureZone2Id` |
+| Cargo Temp Zone 3 | `DiagnosticCargoTemperatureZone3Id` |
+| Reefer Setpoint Zone 1 | `RefrigerationUnitSetTemperatureZone1Id` |
+| Reefer Setpoint Zone 2 | `RefrigerationUnitSetTemperatureZone2Id` |
+| Reefer Setpoint Zone 3 | `RefrigerationUnitSetTemperatureZone3Id` |
+| Reefer Unit Status | `RefrigerationUnitStatusId` (digital: 0=Disabled, 1=On, 2=Off, 3=Error) |
+
+**Common Mistake:** Similar-sounding IDs may not work. For example, `DiagnosticEngineCrankingVoltageId` returns no data, but `DiagnosticCrankingVoltageId` works. Always verify in Engine Measurements first.
+
+### Discovering Diagnostics by Name (Portable Across Databases)
+
+When you don't know the exact Diagnostic ID — or need your Add-In to work across different databases — search by name pattern instead of hardcoding IDs. The `%` wildcard works like SQL LIKE:
+
+```javascript
+api.call("Get", {
+    typeName: "Diagnostic",
+    search: { name: "%Temperature%" }
+}, function(diags) {
+    // Filter client-side for the specific sensor you need
+    var tempDiag = null;
+    for (var i = 0; i < diags.length; i++) {
+        var n = diags[i].name.toLowerCase();
+        if (n.indexOf("cargo") > -1 && n.indexOf("zone 1") > -1) {
+            tempDiag = diags[i];
+            break;
+        }
+    }
+    if (tempDiag) {
+        // Now use tempDiag.id in your StatusData queries
+    }
+}, errorCallback);
+```
+
+**When to use this pattern:**
+- Sensor-based Add-Ins (temperature, fuel, tire pressure) where IDs vary by device type
+- Add-Ins intended for distribution across multiple databases
+- Any time you don't have access to Engine Measurements to manually look up IDs
+
+**Common search patterns:** `%Temperature%`, `%Fuel%`, `%Tire%`, `%Battery%`, `%Speed%`
+
+### Exporting Data (PDF, Excel, CSV)
+
+Add-Ins can generate downloadable files client-side using CDN libraries. This is the simplest approach when you don't have a backend — but you can also generate exports server-side if you have one.
+
+**Recommended CDN libraries for export:**
+| Library | CDN URL | Use Case |
+|---------|---------|----------|
+| jsPDF | `https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js` | PDF generation |
+| jspdf-autotable | `https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js` | Formatted tables in PDFs |
+| SheetJS (xlsx) | `https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js` | Excel .xlsx files |
+
+**PDF with chart image and data table:**
+```javascript
+var doc = new jspdf.jsPDF("p", "mm", "a4");
+doc.setFontSize(16);
+doc.text("Fleet Report", 14, 15);
+
+// Capture a Chart.js canvas as an image
+var img = document.getElementById("myChart").toDataURL("image/png", 1.0);
+doc.addImage(img, "PNG", 10, 25, 190, 90);
+
+// Add a data table below the chart
+doc.autoTable({
+    head: [["Vehicle", "Value", "Time"]],
+    body: rows,
+    startY: 120,
+    theme: "striped"
+});
+doc.save("report.pdf");
+```
+
+**Excel with multiple worksheets:**
+```javascript
+var wb = XLSX.utils.book_new();
+dataByVehicle.forEach(function(d) {
+    var ws = XLSX.utils.json_to_sheet(d.rows);
+    // Excel tab names max 31 characters
+    XLSX.utils.book_append_sheet(wb, ws, d.name.substring(0, 31));
+});
+XLSX.writeFile(wb, "fleet_data.xlsx");
+```
+
+**CSV (no library needed):**
+```javascript
+var csv = "Vehicle,Speed,Time\n";
+data.forEach(function(r) {
+    csv += r.vehicle + "," + r.speed + "," + r.time + "\n";
+});
+var blob = new Blob([csv], { type: "text/csv" });
+var a = document.createElement("a");
+a.href = URL.createObjectURL(blob);
+a.download = "export.csv";
+a.click();
+```
+
+See the [Cold Chain Historical View](../../../guides/annotated-examples/COLD_CHAIN_HISTORICAL_VIEW.md) annotated example for a complete working Add-In with PDF and Excel export.
+
+## Persistent Storage (AddInData)
+
+Add-Ins can store custom JSON data that persists across sessions using `AddInData` (10,000 char limit per record).
+
+```javascript
+// IMPORTANT: Generate this ID ONCE, then hardcode it in your Add-In
+var MY_ADDIN_ID = "a2C4ABQuLFkepPVf6-4OKAQ";  // Fixed ID for this Add-In
+
+// Save
+api.call("Add", {
+    typeName: "AddInData",
+    entity: {
+        addInId: MY_ADDIN_ID,
+        groups: [{ id: "GroupCompanyId" }],
+        details: { theme: "dark", lastUpdated: new Date().toISOString() }
+    }
+}, function(id) { console.log("Saved:", id); });
+
+// Load
+api.call("Get", {
+    typeName: "AddInData",
+    search: { addInId: MY_ADDIN_ID }
+}, function(results) {
+    if (results.length > 0) console.log(results[0].details);
+});
+```
+
+> **Full documentation:** See [STORAGE_API.md](STORAGE_API.md) for query operators, object path notation, update/delete patterns, and limitations.
+
+## Using Geotab Ace in Add-Ins
+
+Add-Ins can use Geotab Ace for AI-powered natural language queries. **Ace uses the same API connection** - no separate authentication needed.
+
+| Direct API | Ace AI |
+|-----------|--------|
+| ~400ms response | ~30-90 seconds |
+| Real-time data | 2-24 hours behind |
+| Structured queries | Natural language |
+| Best for: live data, writes | Best for: trends, insights |
+
+### Quick Example
+
+```javascript
+// Ace uses the SAME api object - no separate auth
+askAce(api, "Which vehicles drove the most last month?", function(result) {
+    console.log("Data:", result.data);       // Array of rows
+    console.log("Reasoning:", result.reasoning); // AI explanation
+}, function(error) {
+    console.error("Error:", error);
+});
+```
+
+### Good Ace Questions
+
+- "Which drivers have the best safety scores this month?"
+- "What's the fuel consumption trend for vehicle X?"
+- "Find vehicles that might need maintenance soon"
+- "Compare performance across my fleet regions"
+
+### When NOT to Use Ace
+
+- Displaying current vehicle positions (use DeviceStatusInfo)
+- Showing today's trips (use Get Trip with date filter)
+- Creating/updating entities (use Add/Set)
+- Any UI that needs instant response
+
+### Getting Full Results (More Than 10 Rows)
+
+Ace's `preview_array` only returns 10 rows. For full data, use `signed_urls` from the response - **CORS-approved for geotab.com** (embedded Add-Ins work):
+
+```javascript
+// Extract CSV URL from Ace response messages
+if (msg.signed_urls) {
+    fetch(msg.signed_urls[0])
+        .then(function(r) { return r.text(); })
+        .then(function(csv) { /* parse all rows */ });
+}
+```
+
+> **Full Ace documentation:** See [ACE_API.md](ACE_API.md) for complete patterns, CSV parsing, rate limiting, and code examples.
+
+## Button Add-Ins
+
+> **TODO:** Button Add-In patterns below are based on the official sdk-addin-samples but haven't been tested on a demo database yet. Verify the config and state object structure work as documented.
+
+Button Add-Ins attach to **existing MyGeotab pages** (like the vehicle detail page) instead of creating new pages. They appear as action buttons alongside built-in controls.
+
+### Button vs. Page Configuration
+
+| Property | Page Add-In | Button Add-In |
+|----------|------------|---------------|
+| Content reference | `"url": "page.html"` | `"click": "script.js"` |
+| Label | `"menuName": { "en": "..." }` | `"buttonName": { "en": "..." }` |
+| Placement | `"path": "ActivityLink/"` | `"page": "device"` |
+
+### Button Configuration
+
+```json
+{
+  "name": "My Button Add-In",
+  "supportEmail": "https://github.com/your-repo",
+  "version": "1.0.0",
+  "items": [{
+    "page": "device",
+    "click": "https://yourusername.github.io/repo/myButton.js",
+    "buttonName": {
+      "en": "My Action",
+      "fr": "Mon Action"
+    },
+    "icon": "https://yourusername.github.io/repo/icon.svg"
+  }]
+}
+```
+
+**Valid `page` values:** `"device"` (vehicle detail page). Buttons appear as action icons on that page.
+
+### Button Script Pattern
+
+The JS file referenced by `"click"` receives the current page state. Use it to read the selected entity and act on it:
+
+```javascript
+// myButton.js - runs when the button is clicked
+geotab.addin["myButton"] = function() {
+    return {
+        initialize: function(api, state, callback) {
+            // state contains the page context
+            // state.device.id = currently selected vehicle ID
+            callback();
+        },
+        focus: function(api, state) {
+            var deviceId = state.device.id;
+
+            // Option 1: Navigate to another page with context
+            window.parent.location.hash = "tripsHistory,devices:!(" + deviceId + ")";
+
+            // Option 2: Fetch data and show a popup
+            api.call("Get", {
+                typeName: "Trip",
+                search: {
+                    deviceSearch: { id: deviceId },
+                    fromDate: new Date(Date.now() - 7 * 86400000).toISOString(),
+                    toDate: new Date().toISOString()
+                }
+            }, function(trips) {
+                alert("This vehicle had " + trips.length + " trips in the last 7 days");
+            });
+        },
+        blur: function() {}
+    };
+};
+```
+
+### Localization
+
+Button Add-Ins support multilingual labels. Include translations in the config:
+
+```json
+"buttonName": {
+    "en": "Engine Data Profile",
+    "fr": "Profil des données-moteur",
+    "es": "Perfil de datos de motor",
+    "ja": "エンジンデータプロフィール"
+}
+```
+
+MyGeotab automatically displays the label matching the user's language setting.
+
+## Navigation & Integrations
+
+### MyGeotab Navigation
+
+Navigate to other MyGeotab pages using `window.parent.location.hash`:
+
+| Page | Hash | Example |
+|------|------|---------|
+| Vehicle | `#device,id:{id}` | `#device,id:b3230` |
+| Trips | `#tripsHistory,devices:!({id})` | `#tripsHistory,devices:!(b12)` |
+| Map | `#map,liveVehicleIds:!({id})` | `#map,liveVehicleIds:!(b3230)` |
+
+```javascript
+// Clickable vehicle link
+link.onclick = function(e) {
+    e.preventDefault();
+    window.parent.location.hash = "device,id:" + device.id;
+};
+```
+
+### External Integrations (No API Key)
+
+| Integration | URL Scheme |
+|-------------|-----------|
+| Email | `mailto:email?subject=...&body=...` |
+| Phone | `tel:number` |
+| SMS | `sms:number?body=...` |
+| WhatsApp | `https://wa.me/number?text=...` |
+| Google Maps | `https://google.com/maps?q=lat,lng` |
+| Google Calendar | `https://calendar.google.com/calendar/render?action=TEMPLATE&text=...` |
+
+### Free APIs
+
+| Service | URL | Notes |
+|---------|-----|-------|
+| Weather | `https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lng}&current_weather=true` | No key needed |
+| Geocoding | `https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lng}&format=json` | 1 req/sec limit |
+
+> **Full documentation:** See [INTEGRATIONS.md](INTEGRATIONS.md) for complete code examples (email, calendar, maps, clipboard, CSV export, print, text-to-speech, native share).
+
+## Critical Mistakes to Avoid
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Missing `callback()` | Add-In hangs | Always call `callback()` in initialize |
+| Using `}();` | Wrong pattern | Use `};` - assign function, don't invoke |
+| Undeclared variables | Implicit globals | Always use `const`, `let`, or `var` |
+| `typeName: "Driver"` | API errors | Use `User` with `isDriver: true` |
+| Inline `<style>` tags | Styles don't render | Use external CSS file |
+| Variable named `state` | Shadows parameter | Use `appState` or similar |
+| Using `api.async.call()` | `undefined` error in some environments | Use `api.call(method, params, successCb, errorCb)` |
+| Using `this.method()` in callbacks | `this` context lost | Define functions as `var fn = function(){}` in closure scope |
+| Trusting DeviceStatusInfo for odometer | Returns 0 or undefined | Use StatusData with `DiagnosticOdometerId` |
+| Wrong StatusData units | Values look absurdly large | Odometer is meters (÷1609.34→miles), hours is seconds (÷3600→hours) |
+| Arrow functions / const / template literals in embedded Add-Ins | `SyntaxError` in MyGeotab iframe | Embedded Add-Ins require ES5: use `var`, `function`, string `+` concatenation |
+| Using `state.setState()` for navigation | Silently fails | Use `window.parent.location.hash` (see [INTEGRATIONS.md](INTEGRATIONS.md)) |
+| Mocking Ace with `setTimeout` | Ace never actually called | Use real 3-step GetAceResults API (see [ACE_API.md](ACE_API.md)) |
+| Rendering thousands of rows | Browser freezes | Aggregate by category, show top-N summary |
+| No loading indicator | Blank screen, user thinks it's broken | Show "Loading..." before every API call |
+| Storing full arrays in debug data | Copy Debug Data freezes browser | Use `arr.slice(0, 10)` samples + total count |
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for complete debugging guide.
+
+## Embedded Add-Ins (No Hosting)
+
+For quick prototypes without hosting.
+
+> **CRITICAL:** The JSON structure must be EXACTLY as shown below. Common mistakes cause "Page Not Found" errors.
+
+### Correct Format
+
+```json
+{
+  "name": "Embedded Add In",
+  "supportEmail": "https://github.com/fhoffa/geotab-vibe-guide",
+  "version": "1.0",
+  "items": [{
+    "url": "page.html",
+    "path": "ActivityLink",
+    "menuName": { "en": "My Add-In" }
+  }],
+  "files": {
+    "page.html": "<!DOCTYPE html><html><body style='padding:20px;font-family:Arial;'><div id='app'>Loading...</div><script>geotab.addin['myapp']=function(){return{initialize:function(api,state,callback){api.call('Get',{typeName:'Device'},function(d){document.getElementById('app').textContent='Vehicles: '+d.length;});callback();},focus:function(){},blur:function(){}};};console.log('registered');</script></body></html>"
+  }
+}
+```
+
+### Common Format Mistakes
+
+| WRONG | CORRECT |
+|-------|---------|
+| `"pages": [{"html": "..."}]` | `"files": {"page.html": "..."}` |
+| `"items": [{"html": "..."}]` | `"files": {"page.html": "..."}` |
+| `"content": "..."` | `"files": {"page.html": "..."}` |
+| `"path": "ActivityLink/"` (trailing slash) | `"path": "ActivityLink"` (no trailing slash) |
+
+### Embedded Rules
+
+- Use `style=""` on elements (not `<style>` tags - they get stripped!)
+- Single quotes for HTML attributes inside JSON strings
+- Escape double quotes: `\"`
+- No external file references (everything inline)
+- `url` in items matches filename in `files` object
+- Path without trailing slash: `"ActivityLink"` (not `"ActivityLink/"`)
+
+See [EMBEDDED.md](EMBEDDED.md) for complete embedded add-in guide.
+
+## Complete Examples
+
+**Vehicle Manager** - CRUD operations (list vehicles, rename):
+- Live: `https://fhoffa.github.io/geotab-vibe-guide/examples/addins/vehicle-manager/`
+- Code: [EXAMPLES.md](EXAMPLES.md#vehicle-manager-crud-example)
+
+**Fleet Stats** - Simple read-only dashboard:
+- Code: [EXAMPLES.md](EXAMPLES.md#complete-fleet-stats-example)
+
+## GitHub Pages Deployment
+
+1. Push files to GitHub repository
+2. Enable GitHub Pages (Settings > Pages > main branch)
+3. Wait 2-3 minutes for deployment
+4. Test URL directly in browser first
+5. In MyGeotab: Administration > System Settings > Add-Ins
+6. Enable "Allow unverified Add-Ins" > Yes (required for custom Add-Ins)
+7. Add your Add-In configuration JSON
+8. Hard refresh (Ctrl+Shift+R) if add-in doesn't appear
+
+**Cache Busting:** Add version query if changes don't appear:
+```json
+"url": "https://username.github.io/repo/addin.html?v=2"
+```
+
+## Learning Path: Vanilla to Zenith
+
+### Step 1: Start with Vanilla JS
+
+The Vehicle Manager example (see [EXAMPLES.md](EXAMPLES.md)) uses vanilla JavaScript with external CSS. This approach:
+- Works immediately (no build step)
+- Easy to understand and modify
+- Good for learning the Geotab API patterns
+- Runs directly in MyGeotab
+
+**Test it:** Use the vanilla example at `examples/addins/vehicle-manager/`
+
+**Ready-to-use JSON (copy & paste into MyGeotab):**
+```json
+{
+  "name": "Vehicle Manager Vanilla",
+  "supportEmail": "https://github.com/fhoffa/geotab-vibe-guide",
+  "version": "1.0.0",
+  "items": [{
+    "url": "https://fhoffa.github.io/geotab-vibe-guide/examples/addins/vehicle-manager/vehicle-manager.html",
+    "path": "ActivityLink/",
+    "menuName": { "en": "Vehicle Manager" }
+  }]
+}
+```
+
+### Step 2: Vibe Code the Transformation to Zenith
+
+Once comfortable with the vanilla version, use AI to transform it to React + Zenith for a professional MyGeotab look.
+
+**Prompt to give your AI assistant:**
+
+```
+Transform this Geotab Add-In to use React and the @geotab/zenith design system:
+
+1. Convert the vanilla JS to a React functional component
+2. Replace custom CSS with Zenith components:
+   - Buttons -> <Button variant="primary/secondary">
+   - Text inputs -> <TextInput label="..." />
+   - Tables -> <Table columns={} data={} />
+   - Loading states -> <Waiting size="large" />
+   - Error/success messages -> <Alert variant="error/success">
+3. Use Zenith design tokens for any custom styling (--zenith-spacing-md, etc.)
+4. Set up webpack build configuration
+5. Keep the same Geotab API logic (Get, Set calls)
+
+Here's my current vanilla JS add-in:
+[paste your code]
+```
+
+**What changes:**
+
+| Vanilla JS | React + Zenith |
+|-----------|----------------|
+| `document.getElementById()` | React state + JSX |
+| Custom `.save-btn` CSS | `<Button variant="primary">` |
+| Custom input styling | `<TextInput label="Name">` |
+| Manual DOM table building | `<Table columns={} data={}>` |
+| `alert()` for errors | `<Alert variant="error">` |
+| No build step | npm + webpack required |
+
+**Zenith version example:** `examples/addins/vehicle-manager-zenith/`
+
+**Ready-to-use JSON (copy & paste into MyGeotab):**
+```json
+{
+  "name": "Vehicle Manager Zenith",
+  "supportEmail": "https://github.com/fhoffa/geotab-vibe-guide",
+  "version": "1.0.0",
+  "items": [{
+    "url": "https://fhoffa.github.io/geotab-vibe-guide/examples/addins/vehicle-manager-zenith/dist/vehicle-manager.html",
+    "path": "ActivityLink/",
+    "menuName": { "en": "Vehicle Manager (Zenith)" }
+  }]
+}
+```
+
+### Why This Progression?
+
+1. **Learn the API first** - Vanilla JS lets you focus on Geotab API patterns without React complexity
+2. **Understand what Zenith replaces** - You'll appreciate Zenith more after building custom CSS
+3. **Easier debugging** - Vanilla JS has no build step, simpler stack traces
+4. **Vibe coding works better** - AI can transform working code more reliably than generating complex React from scratch
+
+### Zenith Trade-offs (Be Aware!)
+
+| Aspect | Vanilla JS | React + Zenith |
+|--------|-----------|----------------|
+| **Setup time** | Instant | npm install + build (minutes) |
+| **Bundle size** | ~5 KB | ~2.3 MB (fonts, components) |
+| **Debugging** | Clear stack traces | Minified, hard to trace |
+| **Dependencies** | None | React, Zenith, Webpack, Babel |
+| **Iteration speed** | Edit -> Refresh | Edit -> Build -> Refresh |
+| **Error messages** | Clear | Cryptic (minified) |
+
+**Zenith Gotchas We Discovered:**
+- `FeedbackProvider` wrapper required for `Alert` components
+- Zenith `Table` component has issues with custom render functions -> use HTML table with Zenith styling instead
+- Component names differ: `TextInput` (not TextField), `Waiting` (not Spinner)
+- Large bundle includes all fonts even if unused
+
+**Recommendation:**
+- **Quick prototypes / learning** -> Vanilla JS
+- **Production add-ins matching MyGeotab UI** -> Zenith (worth the complexity)
+- **Simple add-ins that just work** -> Vanilla JS with Zenith color tokens
+
+## Additional Resources
+
+**Related References:**
+- [ZENITH_STYLING.md](ZENITH_STYLING.md) - React component library for professional Geotab UI
+
+**Reference Files:**
+- [EXAMPLES.md](EXAMPLES.md) - Full working add-in code
+- [EMBEDDED.md](EMBEDDED.md) - No-hosting deployment
+- [INTEGRATIONS.md](INTEGRATIONS.md) - Navigation, email, maps, weather, etc.
+- [STORAGE_API.md](STORAGE_API.md) - AddInData persistence patterns
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common mistakes and debugging
+
+**External Documentation:**
+- [Official Docs](https://developers.geotab.com/myGeotab/addIns/developingAddIns/)
+- [API Reference](https://geotab.github.io/sdk/software/api/reference/)
+- [Sample Add-Ins](https://github.com/Geotab/sdk-addin-samples)
